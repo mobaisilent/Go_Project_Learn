@@ -1,0 +1,13 @@
+{
+  "ID": "userservice",
+  "Name": "userservice",
+  "Tags": [
+    "primary"
+  ],
+  "Address": "127.0.0.1",
+  "Port": 8080,
+  "Check": {
+    "HTTP": "http://127.0.0.1:8080/health",
+    "Interval": "5s"
+  }
+}
