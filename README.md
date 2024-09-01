@@ -65,3 +65,58 @@
 >
 >https://github.com/CocaineCong/gRPC-todoList
 
+## Project4
+
+> 项目融入了不少其他包：虽然核心都是围绕着go-kit的
+
+### 关于go-kit
+
+>https://github.com/go-kit/kit
+
+优秀的微服务工具包合集，利用它提供的API和规范可以创建健壮，可维护性高的微服务体系。
+
+
+
+文档：
+
+https://godoc.org/github.com/go-kit/kit
+
+
+
+安装：
+
+```go
+go get github.com/go-kit/kit
+```
+
+
+
+类似框架：
+
+- https://github.com/micro/go-micro
+- https://github.com/koding/kite
+
+### 微服务体系的基本需求（非全部
+
+1. HTTPREST、RPC
+2. 日志功能
+3. 限流
+4. API监控
+5. 服务注册与发现
+6. API网关服务链路追踪
+7. 服务熔断
+
+### Go-kit的三层架构
+
+1. Transport
+
+   主要负责与HTTP、gRPC、thrift等相关的逻辑
+
+2. Endpoint
+   定义Request和Response格式，并可以使用装饰器包装函数，
+   以此来实现各种中间件嵌套。
+
+3. Service
+   这里就是我们的业务类、接口等
+
+> 定义顺序是：Service -> Endpoint -> Transport
