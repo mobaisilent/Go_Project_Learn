@@ -449,30 +449,86 @@ func (i *Input) Update() {
 
 ebitengine引擎提供了`ebitenutil.NewImageFromFile`函数，传入图片路径即可加载该图片，so easy。为了很好的管理游戏中的各个实体，我们给每个实体都定义一个结构。先定义飞船结构：
 
+ship.go
+
 ```go
+package main
+
 import (
-    _ "golang.org/x/image/bmp"
+    "log"
+
+    "github.com/hajimehoshi/ebiten/v2"
+    "github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 type Ship struct {
-  image  *ebiten.Image
-  width  int
-  height int
+    image  *ebiten.Image
+    width  int
+    height int
 }
 
 func NewShip() *Ship {
-  img, _, err := ebitenutil.NewImageFromFile("../images/ship.bmp")
-  if err != nil {
-    log.Fatal(err)
-  }
+	// 用ebiten自带的就能解析png图片
+    img, _, err := ebitenutil.NewImageFromFile("../resource/ship.png")
+    if err != nil {
+        log.Fatal(err)
+    }
 
-  width, height := img.Size()
-  ship := &Ship{
-    image:  img,
-    width:  width,
-    height: height,
-  }
+  	// 通过对象获取width和height然后直接传递数值就行
+    width, height := img.Size()
+    ship := &Ship{
+        image:  img,
+        width:  width,
+        height: height,
+    }
 
-  return ship
+    return ship
+}
+```
+
+Go标准库提供了三种格式的解码包，`image/png`，`image/jpeg`，`image/gif`。也就是说标准库中没有bmp格式的解码包，所幸golang.org/x仓库没有让我们失望，golang.org/x/image/bmp提供了解析bmp格式图片的功能。我们这里不需要显式的使用对应的图片库，故使用`import _`这种方式，让`init`函数产生副作用。
+
+然后在游戏对象中添加飞船类型的字段：
+
+```golang
+func NewGame() *Game {
+  // 相同的代码省略...
+  return &Game {
+    input:   &Input{},
+    ship:  NewShip(),
+    cfg:  cfg,
+  }
+}
+```
+
+为了将飞船显示在屏幕底部中央位置，我们需要计算坐标。ebitengine采用如下所示的二维坐标系：
+
+![img](images/ebiten8.png)
+
+x轴向右，y轴向下，左上角为原点。我们需要计算飞船左上角的位置。由上图很容易计算出：
+
+```fallback
+x=(W1-W2)/2
+y=H1-H2
+```
+
+为了在屏幕上显示飞船图片，我们需要调用`*ebiten.Image`的`DrawImage`方法，该方法的第二个参数可以用于指定坐标相对于原点的偏移：
+
+```golang
+func (g *Game) Draw(screen *ebiten.Image) {
+  screen.Fill(g.cfg.BgColor)
+  op := &ebiten.DrawImageOptions{}
+  op.GeoM.Translate(float64(g.cfg.ScreenWidth-g.ship.width)/2, float64(g.cfg.ScreenHeight-g.ship.height))
+  screen.DrawImage(g.ship.image, op)
+}
+```
+
+我们给`Ship`类型增加一个绘制自身的方法，传入屏幕对象screen和配置，让代码更好维护：
+
+```golang
+func (ship *Ship) Draw(screen *ebiten.Image, cfg *Config) {
+    op := &ebiten.DrawImageOptions{}
+    op.GeoM.Translate(float64(cfg.ScreenWidth-ship.width)/2, float64(cfg.ScreenHeight-ship.height))
+    screen.DrawImage(ship.image, op)
 }
 ```

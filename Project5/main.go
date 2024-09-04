@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 // 更新游戏内容显示
@@ -15,8 +14,8 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(g.cfg.BgColor)
-	ebitenutil.DebugPrint(screen, g.input.msg)
+	screen.Fill(g.cfg.BgColor) // 绘制背景
+	g.ship.Draw(screen, g.cfg) // 绘制飞船
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {

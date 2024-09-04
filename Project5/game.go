@@ -6,6 +6,7 @@ import (
 
 type Game struct {
 	input *Input
+	ship  *Ship
 	cfg   *Config
 }
 
@@ -18,6 +19,7 @@ func NewGame() *Game {
 		input: &Input{
 			msg: "hello world",
 		},
-		cfg: cfg,
+		ship: NewShip(),
+		cfg:  cfg,
 	}
 }
