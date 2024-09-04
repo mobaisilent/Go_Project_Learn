@@ -19,7 +19,7 @@ func NewGame() *Game {
 		input: &Input{
 			msg: "hello world",
 		},
-		ship: NewShip(),
+		ship: NewShip(cfg.ScreenWidth, cfg.ScreenHeight),
 		cfg:  cfg,
 	}
 }

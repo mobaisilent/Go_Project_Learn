@@ -9,8 +9,8 @@ import (
 // 更新游戏内容显示
 
 func (g *Game) Update() error {
-	g.input.Update()
-	return nil
+  g.input.Update(g.ship)
+  return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -19,8 +19,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return g.cfg.ScreenWidth / 2, g.cfg.ScreenHeight / 2
+	return g.cfg.ScreenWidth, g.cfg.ScreenHeight
 }
+
+// 这里不用除以2 直接返回config.json中的尺寸大小即可， /2 之后飞船绘制不出来
 
 // 关于Game结构体写三个接口 实现游戏的初始化、更新、渲染
 

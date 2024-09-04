@@ -77,6 +77,10 @@ type Game interface {
 - `Layout`：该方法接收游戏窗口的尺寸作为参数，返回游戏的逻辑屏幕大小。我们实际上计算坐标是对应这个逻辑屏幕的，`Draw`将逻辑屏幕渲染到实际窗口上。这个时候可能会出现伸缩。在上面的例子中游戏窗口大小为(640, 480)，`Layout`返回的逻辑大小为(320, 240)，所以显示会放大1倍。
 
 > Layout是设置逻辑分辨率，而main函数中设置的是实际分辨率
+>
+> 不想区分这里或者因为尺寸问题造成元素不显示就直接传递数值就好，根据效果对应修改就行了
+>
+> 比如后面的飞船那里：如果不删去 /2 的话飞船不显示
 
 ## 处理输入
 
@@ -532,3 +536,211 @@ func (ship *Ship) Draw(screen *ebiten.Image, cfg *Config) {
     screen.DrawImage(ship.image, op)
 }
 ```
+
+main.go函数中的Draw就可以简化为：
+
+```go
+func (g *Game) Draw(screen *ebiten.Image) {
+    screen.Fill(g.cfg.BgColor)
+    g.ship.Draw(screen, g.cfg)
+}
+```
+
+文件结构如下；
+
+> 相比于上一步多了`ship.go`然后修改下game结构体和main函数即可
+
+```bash
+mobai@mobaideAir Project5 % tree .
+.
+├── backup
+│   └── main.go
+├── config.go
+├── config.json
+├── game.go
+├── go.mod
+├── go.sum
+├── input.go
+├── main.go
+├── resource
+│   └── ship.png
+└── ship.go
+```
+
+为了防止歧义或者哪步搞错，下面给出完整的`main.go`和`ship.go`
+
+main.go
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+// 更新游戏内容显示
+
+func (g *Game) Update() error {
+	g.input.Update()
+	return nil
+}
+
+func (g *Game) Draw(screen *ebiten.Image) {
+	screen.Fill(g.cfg.BgColor) // 绘制背景
+	g.ship.Draw(screen, g.cfg) // 绘制飞船
+}
+
+func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	return g.cfg.ScreenWidth, g.cfg.ScreenHeight
+}
+
+// 这里不用除以2 直接返回config.json中的尺寸大小即可， /2 之后飞船绘制不出来
+
+// 关于Game结构体写三个接口 实现游戏的初始化、更新、渲染
+
+func main() {
+
+	game := NewGame()
+
+	if err := ebiten.RunGame(game); err != nil {
+		log.Fatal(err)
+	}
+}
+
+```
+
+ship.go
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+)
+
+type Ship struct {
+	image  *ebiten.Image
+	width  int
+	height int
+}
+
+func NewShip() *Ship {
+	// 用ebiten自带的就能解析png图片
+	img, _, err := ebitenutil.NewImageFromFile("resource/ship.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	width, height := img.Size()
+	fmt.Println("width:", width, "height:", height)
+	// 能够获取到尺寸 60 48 呢 那么应该不是飞船对象问题导致的图片加载失败
+	ship := &Ship{
+		image:  img,
+		width:  width,
+		height: height,
+	}
+
+	return ship
+}
+
+func (ship *Ship) Draw(screen *ebiten.Image, cfg *Config) {
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(float64(cfg.ScreenWidth-ship.width)/2, float64(cfg.ScreenHeight-ship.height))
+	// 这里是做了减法运算获取到飞船的左上角位置，是的飞船位于中心位置
+	screen.DrawImage(ship.image, op)
+	// fmt.Println("draw ship") 是一直在绘制中
+}
+
+```
+
+运行结果如下：
+![image-20240904123515860](images/image-20240904123515860.png)
+
+> 可见 飞船 是正好在绘制窗口的正中间显示的：达到了我们想要的结构
+
+## 移动飞船
+
+现在我们来实现使用左右方向键来控制飞船的移动。首先给飞船的类型增加x/y坐标字段：
+
+> 修改ship.go里面的Ship结构体
+
+```go
+type Ship struct {
+    // 与前面的代码一样
+    x float64 // x坐标
+    y float64 // y坐标
+}
+```
+
+我们前面已经计算出飞船位于屏幕底部中心时的坐标，在创建飞船时将该坐标赋给xy：
+
+> 修改ship.go里面的NewShip函数
+
+```go
+func NewShip(screenWidth, screenHeight int) *Ship {
+  ship := &Ship{
+    // ...
+    x: float64(screenWidth-width) / 2,
+    y: float64(screenHeight - height),
+  }
+
+  return ship
+}
+```
+
+由于`NewShip`计算初始坐标需要屏幕尺寸，故增加屏幕宽、高两个参数，由`NewGame`方法传入：
+
+> 也就是上面NewShip中所需要使用的两个参数： screenWidth和screeenHeight  修改game.go里面的NewGame函数
+
+```golang
+func NewGame() *Game {
+  // 与上面的代码一样
+
+  return &Game{
+    input: &Input{},
+    ship:  NewShip(cfg.ScreenWidth, cfg.ScreenHeight),  // 添加这里传入两个参数
+    cfg:   cfg,
+  }
+}
+```
+
+然后我们在`Input`的`Update`方法中根据按下的是左方向键还是右方向键来更新飞船的坐标：
+
+> 修改input.go里面的Update函数
+
+```golang
+type Input struct{}
+
+func (i *Input) Update(ship *Ship) {
+  if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+    ship.x -= 1
+  } else if ebiten.IsKeyPressed(ebiten.KeyRight) {
+    ship.x += 1
+  }
+}
+// 传入的是一个ship对象，然后对其x进行修改就行了
+```
+
+由于需要修改飞船坐标，`Game.Update`方法调用`Input.Update`时需要传入飞船对象：
+
+> 修改main.go里面的Update函数
+
+```golang
+func (g *Game) Update() error {
+  g.input.Update(g.ship)
+  return nil
+}
+```
+
+
+
+> 修改好上面提到的几个点，结果如下：  go run .
+
+
+

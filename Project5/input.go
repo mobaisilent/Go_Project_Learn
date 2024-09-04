@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -11,15 +12,14 @@ type Input struct {
 
 // NewGame()函数用于初始化游戏：为Game结构体的信息赋值
 
-func (i *Input) Update() {
+func (i *Input) Update(ship *Ship) {
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
-		fmt.Println("←←You Pressed Left ←←")
-		i.msg = "left pressed"
+		fmt.Println("left")
+		ship.x -= 1
 	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
-		fmt.Println("→→You Pressed Right→→")
-		i.msg = "right pressed"
-	} else if ebiten.IsKeyPressed(ebiten.KeySpace) {
-		fmt.Println("--You Pressed Space--")
-		i.msg = "space pressed"
+		fmt.Println("right")
+		ship.x += 1
 	}
 }
+// 能够检测到按下的按键，但是飞船的位置没有发生变化？
+
