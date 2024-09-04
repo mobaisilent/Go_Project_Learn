@@ -742,5 +742,156 @@ func (g *Game) Update() error {
 
 > 修改好上面提到的几个点，结果如下：  go run .
 
+> 测试发现无法 正常改变x轴的坐标位置
+>
+> 找到ship的绘制有问题修改如下
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+)
+
+type Ship struct {
+	image  *ebiten.Image
+	width  int
+	height int
+	x      float64 // x坐标
+	y      float64 // y坐标
+}
+
+// 在game.go那里实现传入这两个参数
+func NewShip(screenWidth int, screenHeight int) *Ship {
+	// 用ebiten自带的就能解析png图片
+	img, _, err := ebitenutil.NewImageFromFile("resource/ship.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	width, height := img.Size()
+	// fmt.Println("width:", width, "height:", height)
+	// 能够获取到尺寸 60 48 呢 那么应该不是飞船对象问题导致的图片加载失败
+	ship := &Ship{
+		image:  img,
+		width:  width,
+		height: height,
+		x:      float64(screenWidth-width) / 2,
+		y:      float64(screenHeight - height),
+	}
+	// 这里传值的时候就已经界定好了x和y，所以下面的Draw函数直接填写就行
+
+	return ship
+}
+
+func (ship *Ship) Draw(screen *ebiten.Image, cfg *Config) {
+	op := &ebiten.DrawImageOptions{}
+	// ship.x = float64(cfg.ScreenWidth-ship.width) / 2
+	ship.y = float64(cfg.ScreenHeight - ship.height)
+	op.GeoM.Translate(ship.x, ship.y)
+	// 这里是做了减法运算获取到飞船的左上角位置，是的飞船位于中心位置
+	screen.DrawImage(ship.image, op)
+	// fmt.Println("draw ship") 是一直在绘制中
+}
+
+// 未实现移动时因为这里Draw的op.GeoM.Translate是固定的，所以飞船不会移动
+// emm
+
+```
+
+移动如下：
+
+![image-20240904172616773](images/image-20240904172616773.png)
+
+注意到，目前有两个问题：
+
+- 移动太慢
+- 可以移出屏幕
+
+修改`config.json`如下
+
+```json
+"shipSpeedFactor": 3
+```
+
+修改`config.go`里面的config结构体：
+
+```golang
+type Config struct {
+    // 一样的代码
+    ShipSpeedFactor float64    `json:"shipSpeedFactor"`
+}
+```
+
+修改`Input.Update`方法，每次更新`ShipSpeedFactor`个像素：
+
+```golang
+func (i *Input) Update(ship *Ship, cfg *Config) {
+  if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+    ship.x -= cfg.ShipSpeedFactor
+  } else if ebiten.IsKeyPressed(ebiten.KeyRight) {
+    ship.x += cfg.ShipSpeedFactor
+  }
+}
+```
+
+因为在`Input.Update`方法中需要访问配置，因此增加`Config`类型的参数，由`Game.Update`方法传入：
+
+```golang
+func (g *Game) Update() error {
+  g.input.Update(g.ship, g.cfg)
+  return nil
+}
+```
+
+> 修改成功，小船的移动速度快了很多，也很方便的修改一些参数信息：关于小船的出界问题见Part2
+
+
+
+# Part2
+
+## 限制飞船的活动范围
+
+上一篇文章还留了个尾巴，细心的同学应该发现了：飞船可以移动出屏幕！！！现在我们就来限制一下飞船的移动范围。我们规定飞船可以左右超过半个身位，如下图所示：
+
+![img](images/ebiten12.png)
+
+很容易计算得出，左边位置的x坐标为：
+
+```
+x = -W2/2
+```
+
+右边位置的坐标为：
+
+```
+x = W1 - W2/2
+```
+
+修改input.go的代码如下：
+
+```golang
+func (i *Input) Update(ship *Ship, cfg *Config) {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		ship.x -= cfg.ShipSpeedFactor
+		if ship.x < -float64(ship.width)/2 {
+			ship.x = -float64(ship.width) / 2
+		}
+	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		ship.x += cfg.ShipSpeedFactor
+		if ship.x > float64(cfg.ScreenWidth)-float64(ship.width)/2 {
+			ship.x = float64(cfg.ScreenWidth) - float64(ship.width)/2
+		}
+	}
+}
+
+// 增加两个if语句实现越界检测即可
+```
+
+效果自行实践。可以实现飞机主体尽量不越出界了
+
 
 

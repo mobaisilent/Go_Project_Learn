@@ -8,10 +8,11 @@ import (
 )
 
 type Config struct {
-	ScreenWidth  int        `json:"screenWidth"`
-	ScreenHeight int        `json:"screenHeight"`
-	Title        string     `json:"title"`
-	BgColor      color.RGBA `json:"bgColor"`
+	ScreenWidth     int        `json:"screenWidth"`
+	ScreenHeight    int        `json:"screenHeight"`
+	Title           string     `json:"title"`
+	BgColor         color.RGBA `json:"bgColor"`
+	ShipSpeedFactor float64    `json:"shipSpeedFactor"`
 }
 
 func loadConfig() *Config {

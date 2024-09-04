@@ -9,8 +9,8 @@ import (
 // 更新游戏内容显示
 
 func (g *Game) Update() error {
-  g.input.Update(g.ship)
-  return nil
+	g.input.Update(g.ship, g.cfg)
+	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
