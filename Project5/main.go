@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"log"
+	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
@@ -96,7 +97,7 @@ func (g *Game) Update() error {
 				continue
 			}
 
-			if CheckCollision(alien, g.ship) {
+			if CheckCollision2(g.ship, alien) {
 				g.failCount++
 				delete(g.aliens, alien)
 				continue
@@ -117,8 +118,7 @@ func (g *Game) Update() error {
 
 	case ModeOver:
 		if g.input.IsKeyPressed() {
-			g.init()
-			g.mode = ModeTitle
+			os.Exit(0)
 		}
 
 	}

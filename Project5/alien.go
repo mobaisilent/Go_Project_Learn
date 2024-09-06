@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"log"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"log"
+	// "./resources"
 )
 
 type Alien struct {
@@ -16,7 +19,7 @@ type Alien struct {
 }
 
 func NewAlien(cfg *Config) *Alien {
-	img, _, err := ebitenutil.NewImageFromFile("resource/alien.png")
+	img, _, err := ebitenutil.NewImageFromReader(bytes.NewReader(AlienPng))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,5 +42,7 @@ func (alien *Alien) Draw(screen *ebiten.Image) {
 }
 
 func (alien *Alien) outOfScreen(cfg *Config) bool {
-	return alien.y < -float64(alien.height)
+	return alien.y+float64(alien.height) < -float64(alien.height) || alien.y+float64(alien.height) > float64(cfg.ScreenHeight)
 }
+
+// 检测成功

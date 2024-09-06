@@ -1911,8 +1911,329 @@ if len(g.overMsg) > 0 {
 }
 ```
 
-注意，为了下次游戏能顺序进行，这里需要清楚所有的子弹和外星人。运行：
+注意，为了下次游戏能顺序进行，这里需要清楚所有的子弹和外星人。
+
+自定义好的碰撞检测代码如下 ：
+`confision2.go`
+
+```go
+package main
+
+import ()
+
+// CheckCollision 检查飞机和外星人之间是否有碰撞  -- 代码基本上是一致的，直接复刻基本上就可以了
+func CheckCollision2(ship *Ship, alien *Alien) bool {
+	alienTop, alienLeft := alien.y, alien.x
+	alienBottom, alienRight := alien.y+float64(alien.height), alien.x+float64(alien.width)
+	// 左上角
+	x, y := ship.x, ship.y
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	// 右上角
+	x, y = ship.x+float64(ship.width), ship.y
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	// 左下角
+	x, y = ship.x, ship.y+float64(ship.height)
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	// 右下角
+	x, y = ship.x+float64(ship.width), ship.y+float64(ship.height)
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	return false
+}
+
+```
+
+自定义好的 `outOfScreen` 如下
+
+添加到 `alien.go`
+
+```go
+func (alien *Alien) outOfScreen(cfg *Config) bool {
+	return alien.y+float64(alien.height) < -float64(alien.height) || alien.y+float64(alien.height) > 	float64(cfg.ScreenHeight)
+}
+```
+
+实现好了碰撞检测和alien走到底部边界
+
+
 
 ## 总结
 
 本文接着上篇文章，介绍了发射子弹，检测碰撞，增加主界面和游戏结束界面等内容。至此一个简答的游戏就做出来了。可以看出使用ebitengine做一个游戏还是很简单的，非常推荐尝试呢！上手之后，建议看看官方仓库examples目录中的示例，会非常有帮助。
+
+# Part3
+
+### file2byteslice
+
+使用file2byteslice包我们可以将图片和config.json文件打包进二进制程序中，之后编译生成一个二进制程序。然后拷贝这一个文件即可，不用再拷贝图片和其他配置文件了。
+
+golang有很多第三方包可以将打包资源，原理其实很简单——读取资源文件的内容，然后生成一个go文件，在这个文件中创建一个变量保存这个文件的二进制内容。
+
+我们将使用ebiten作者编写的file2byteslice包。首先使用`go install`命令安装它：
+
+```
+$ go install github.com/hajimehoshi/file2byteslice 
+```
+
+去官方clone仓库然后直接通过go build生成file2byteslice 然后 `./file2byteslice` 运行也是可以的 ：然后兼容 arm架构
+
+file2byteslice的命令格式如下：
+
+```
+$ file2byteslice -input INPUT_FILE -output OUTPUT_FILE -package PACKAGE_NAME -var VARIABLE_NAME 
+```
+
+故我们可以这样来打包文件：
+
+```cmd
+$ file2byteslice -input ../images/ship.png -output resources/ship.go -package resources -var ShipPng
+$ file2byteslice -input ../images/alien.png -output resources/alien.go -package resources -var AlienPng
+$ file2byteslice -input config.json -output resources/config.go -package resources -var ConfigJson
+```
+
+生成文件如下：
+
+![img](images/ebiten22.png)
+
+![img](images/ebiten23.png)
+
+![img](images/ebiten24.png)
+
+​	
+
+> 问题是 生成的 resources 这个包不好使用呢 ./resources 依旧无法使用
+>
+> 继而改到main包中就可以直接使用啦
+>
+> 这里不要认为 模块 名是 包名
+
+相应的加载这些文件的代码需要相应的修改：
+
+> 就是将直接文件读取改为 二进制文件读取
+
+```golang
+// alien.go
+func NewAlien(cfg *Config) *Alien {
+  img, _, err := ebitenutil.NewImageFromReader(bytes.NewReader(resources.AlienPng))
+  if err != nil {
+    log.Fatal(err)
+  }
+  // ...
+}
+```
+
+
+
+```golang
+// ship.go
+func NewShip(screenWidth, screenHeight int) *Ship {
+  img, _, err := ebitenutil.NewImageFromReader(bytes.NewReader(resources.ShipPng))
+  if err != nil {
+    log.Fatal(err)
+  }
+  // ...
+}
+```
+
+
+
+```golang
+// config.go
+func loadConfig() *Config {
+  var cfg Config
+  if err := json.NewDecoder(bytes.NewReader(resources.ConfigJson)).Decode(&cfg); err != nil {
+    log.Fatalf("json.Decode failed: %v\n", err)
+  }
+
+  return &cfg
+}
+```
+
+
+
+然后，我们就可以编译成一个游戏二进制程序随意拷贝到其他电脑上运行了：
+
+```
+$ go build -o alien_invasion 
+```
+
+### go generate
+
+前面先安装file2byteslice程序，然后一个命令一个命令地执行打包，操作起来很是繁琐。如果有文件修改，这个过程又需要来一次。
+
+实际上，我们可以使用`go generate`让上面的过程更智能一点。在main.go文件中添加如下几行注释：
+
+```golang
+//go:generate go install github.com/hajimehoshi/file2byteslice
+//go:generate mkdir resources
+//go:generate file2byteslice -input ../images/ship.png -output resources/ship.go -package resources -var ShipPng
+//go:generate file2byteslice -input ../images/alien.png -output resources/alien.go -package resources -var AlienPng
+//go:generate file2byteslice -input config.json -output resources/config.go -package resources -var ConfigJson
+```
+
+注意，`//`和`go:generate`之间一定不能有空格，一定不能有空格，一定不能有空格，重要的事情说3遍！然后执行下面的命令即可完成安装file2byteslice和打包资源的工作：
+
+```
+$ go generate 
+```
+
+## 让游戏在网页上运行
+
+借助于wasm的强大功能，我们的游戏可以很好地在web上运行！为了让程序能够在网页上运行，我们需要将其编译成wasm。Go内置对wasm的支持。编译方式如下：
+
+```
+$ GOOS=js GOARCH=wasm go build -o alien_invasion.wasm 
+```
+
+Go提供的胶水代码，将位于`$GOROOT/misc/wasm`目录下的wasm_exec.html和wasm_exec.js文件拷贝到我们的项目目录下。注意wasm_exec.html文件中默认是加载名为test.wasm的文件，我们需要将加载文件改为alien_invasion.wasm，或者将生成的文件改名为test.wasm。
+
+然后编写一个简单的web服务器：
+
+```golang
+package main
+
+import (
+  "log"
+  "net/http"
+)
+
+func main() {
+  if err := http.ListenAndServe(":8080", http.FileServer(http.Dir("."))); err != nil {
+    log.Fatal(err)
+  }
+}
+```
+
+运行：
+
+```
+$ go run main.go 
+```
+
+打开浏览器输入地址：localhost:8080/wasm_exec.html。
+
+
+![img](images/ebiten25.png)
+
+点击run按钮即可愉快地玩耍啦！
+
+![img](images/ebiten26.gif)
+
+## 项目的不足
+
+到目前为止，我们的游戏基本上可玩，但是还有很多的不足：
+
+- 没有声音！
+- 外星人没有横向的运动！
+- 分数都没有！
+
+## 总结
+
+接着上文，本文介绍了如何将资源文件打包进一个二进制程序中，方便相互之间的传播。然后我们不费吹灰之力就将这个游戏移至到了网页之中。
+
+总的来说ebiten是一款简单、易上手的2D游戏开发引擎。对游戏开发感兴趣的童鞋可以使用它来快速开发，引起自己的兴趣。用它来开发一些小游戏也是得心应手，而且自带跨平台功能，十分方便。但是，大型、复杂游戏的开发还是要借助专业的引擎。
+
+
+
+## 关于 `go build`
+
+> 该篇目主要介绍go项目如何打包
+
+### 一般情况
+
+> 使用 go build 可以解决大部分打包的情况
+
+-o 选项用于指定输出文件的名称。如果不使用 -o 选项，默认情况下，生成的可执行文件名称与包含 main 函数的源文件或模块名称相同。
+
+关于go build
+
+1. go build
+   这条命令会编译当前目录下的所有 Go 源文件，并生成一个可执行文件。默认情况下，生成的可执行文件名称与包含 main 函数的源文件或模块名称相同。
+2. go build -o myapp
+   使用 -o 选项可以指定输出文件的名称。例如，上面的命令会将编译生成的可执行文件命名为 myapp。
+3. go build main.go
+   这条命令会编译 main.go 文件，并生成一个可执行文件，默认名称为 main。
+4. go build ./path/to/package
+   这条命令会编译指定路径下的包。
+5. GOOS=linux GOARCH=amd64 go build
+   通过设置环境变量 GOOS 和 GOARCH，可以为不同的操作系统和架构进行交叉编译。
+6. go build -ldflags="-s -w"
+   使用 -ldflags="-s -w" 可以减小生成的可执行文件的大小，禁用符号表和调试信息。
+
+### 相对路径
+
+#### 使用绝对路径
+
+> 不推荐，这里不诠释了
+
+#### 使用其他方法
+
+示例json
+`config.json`
+
+```json
+{
+  "titleFontSize": 24.0,
+  "fontSize": 16.0,
+  "smallFontSize": 12.0
+}
+```
+
+示例main.go
+`main.go`
+
+```go
+package main
+
+import (
+	"embed"
+	"encoding/json"
+	"fmt"
+	"log"
+)
+
+//go:embed config.json
+var configFile embed.FS
+
+type Config struct {
+	TitleFontSize float64 `json:"titleFontSize"`
+	FontSize      float64 `json:"fontSize"`
+	SmallFontSize float64 `json:"smallFontSize"`
+}
+
+func loadConfig() (*Config, error) {
+	data, err := configFile.ReadFile("config.json")
+	if err != nil {
+		return nil, err
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func main() {
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+	// 使用 cfg
+	fmt.Printf("Title Font Size: %.2f\n", cfg.TitleFontSize)
+	fmt.Printf("Font Size: %.2f\n", cfg.FontSize)
+	fmt.Printf("Small Font Size: %.2f\n", cfg.SmallFontSize)
+}
+```
+
+> 结果是可以正常运行，不会报文件错误

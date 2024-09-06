@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+	"bytes"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	// "resources"
 )
 
 type Ship struct {
@@ -18,7 +20,7 @@ type Ship struct {
 // 在game.go那里实现传入这两个参数
 func NewShip(screenWidth int, screenHeight int) *Ship {
 	// 用ebiten自带的就能解析png图片
-	img, _, err := ebitenutil.NewImageFromFile("resource/ship.png")
+	img, _, err := ebitenutil.NewImageFromReader(bytes.NewReader(ShipPng))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,3 +52,6 @@ func (ship *Ship) Draw(screen *ebiten.Image, cfg *Config) {
 
 // 未实现移动时因为这里Draw的op.GeoM.Translate是固定的，所以飞船不会移动
 // emm
+// $ file2byteslice -input images/ship.png -output resources/ship.go -package resources -var ShipPng
+// $ file2byteslice -input images/alien.png -output resources/alien.go -package resources -var AlienPng
+// $ file2byteslice -input config.json -output resources/config.go -package resources -var ConfigJson
