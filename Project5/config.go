@@ -20,6 +20,9 @@ type Config struct {
 	MaxBulletNum      int        `json:"maxBulletNum"`
 	BulletInterval    int64      `json:"bulletInterval"`
 	AlienSpeedFactor  float64    `json:"alienSpeedFactor"`
+	TitleFontSize     int        `json:"titleFontSize"`
+	FontSize          int        `json:"fontSize"`
+	SmallFontSize     int        `json:"smallFontSize"`
 }
 
 func loadConfig() *Config {

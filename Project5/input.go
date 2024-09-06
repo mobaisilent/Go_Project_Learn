@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/hajimehoshi/ebiten/v2"
 	"time"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type Input struct {
@@ -36,3 +37,7 @@ func (i *Input) Update(g *Game) {
 }
 
 // 增加两个if语句实现越界检测即可
+
+func (i *Input) IsKeyPressed() bool {
+	return ebiten.IsKeyPressed(ebiten.KeyEnter)
+}

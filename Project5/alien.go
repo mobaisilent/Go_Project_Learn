@@ -4,7 +4,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"log"
-)	
+)
 
 type Alien struct {
 	image       *ebiten.Image
@@ -36,4 +36,8 @@ func (alien *Alien) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(alien.x, alien.y)
 	screen.DrawImage(alien.image, op)
+}
+
+func (alien *Alien) outOfScreen(cfg *Config) bool {
+	return alien.y < -float64(alien.height)
 }

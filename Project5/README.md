@@ -1383,7 +1383,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
   "maxBulletNum": 23,
   "bulletInterval": 150,
   "_comment5": "下面是外星人信息",
-  "alienSpeedFactor": 0.8
+  "alienSpeedFactor": 0.7
 }
 ```
 
@@ -1570,3 +1570,349 @@ func (g *Game) Update() error {
 ```
 
 ![image-20240906143757128](images/image-20240906143757128.png)
+
+> 实现好了击杀判断逻辑，那么接下来就是创建主页面和结束页面啦
+
+## 增加主界面和结束界面
+
+现在一旦运行程序，外星人们就开始运动了。我们想要增加一个按下空格键才开始的功能，并且游戏结束之后，我们也希望能显示一个Game Over的界面。首先，我们定义几个常量，表示游戏当前所处的状态：
+
+编辑`game.go`
+
+```golang
+type Mode int
+
+const (
+  ModeTitle Mode = iota
+  ModeGame
+  ModeOver
+)
+// 三种阶段：开头，游戏和结束
+```
+
+Game结构中需要增加mode字段表示当前游戏所处的状态：
+
+```golang
+type Game struct {
+  mode    Mode
+  // ...
+}
+```
+
+为了显示开始界面，涉及到文字的显示，文字显示和字体处理起来都比较麻烦。ebitengine内置了一些字体，我们可以据此创建几个字体对象：
+
+先处理config配置文件
+
+```json
+  "_conment6": "下面是字体信息",
+  "titleFontSize": 24.0,
+  "fontSize": 16.0,
+  "smallFontSize": 12.0
+```
+
+config.go里面添加下列信息：
+
+```go
+	TitleFontSize     float64    `json:"titleFontSize"`
+	FontSize          float64    `json:"fontSize"`
+	SmallFontSize     float64    `json:"smallFontSize"`
+```
+
+在`main.go`中添加下列代码
+
+```golang
+var (
+	titleArcadeFont font.Face
+	arcadeFont      font.Face
+	smallArcadeFont font.Face
+)
+
+func (g *Game) CreateFonts() {
+	tt, err := opentype.Parse(fonts.PressStart2P_ttf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	const dpi = 72
+	titleArcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    float64(g.cfg.TitleFontSize),
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	arcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    float64(g.cfg.FontSize),
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	smallArcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    float64(g.cfg.SmallFontSize),
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+```
+
+`fonts.PressStart2P_ttf`就是ebitengine提供的字体。创建字体的方法一般在需要的时候微调即可。将创建外星人和字体封装在Game的init方法中：
+
+修改 `game.go`
+
+```golang
+func (g *Game) init() {
+  g.CreateAliens()
+  g.CreateFonts()
+}
+
+func NewGame() *Game {
+  // ...
+    g.init()
+  return g
+}
+```
+
+启动时游戏处于ModeTitle状态，处于ModeTitle和ModeOver时只需要在屏幕上显示一些文字即可。只有在ModeGame状态才需要显示飞船和外星人：
+
+修改`main.go`里面的 Draw 函数
+
+```golang
+func (g *Game) Draw(screen *ebiten.Image) {
+  screen.Fill(g.cfg.BgColor)
+
+  var titleTexts []string
+  var texts []string
+  switch g.mode {
+  case ModeTitle:
+    titleTexts = []string{"ALIEN INVASION"}
+    texts = []string{"", "", "", "", "", "", "", "PRESS ENTER KEY"}
+  case ModeGame:
+    g.ship.Draw(screen)
+    for bullet := range g.bullets {
+      bullet.Draw(screen)
+    }
+    for alien := range g.aliens {
+      alien.Draw(screen)
+    }
+  case ModeOver:
+    texts = []string{"", "GAME OVER!"}
+  }
+
+  for i, l := range titleTexts {
+    x := (g.cfg.ScreenWidth - len(l)*g.cfg.TitleFontSize) / 2
+    text.Draw(screen, l, titleArcadeFont, x, (i+4)*g.cfg.TitleFontSize, color.White)
+  }
+  for i, l := range texts {
+    x := (g.cfg.ScreenWidth - len(l)*g.cfg.FontSize) / 2
+    text.Draw(screen, l, arcadeFont, x, (i+4)*g.cfg.FontSize, color.White)
+  }
+}
+```
+
+在`Game.Update`方法中，我们判断在ModeTitle状态下按下空格，鼠标左键游戏开始，切换为ModeGame状态。游戏结束时切换为GameOver状态，在GameOver状态后按下空格或鼠标左键即重新开始游戏。
+
+修改`main.go`方法
+
+```golang
+func (g *Game) Update() error {
+  switch g.mode {
+  case ModeTitle:
+    if g.input.IsKeyPressed() {
+      g.mode = ModeGame
+    }
+  case ModeGame:
+    for bullet := range g.bullets {
+      bullet.y -= bullet.speedFactor
+    }
+
+    for alien := range g.aliens {
+      alien.y += alien.speedFactor
+    }
+
+    g.input.Update(g)
+
+    g.CheckCollision()
+
+    for bullet := range g.bullets {
+      if bullet.outOfScreen() {
+        delete(g.bullets, bullet)
+      }
+    }
+  case ModeOver:
+    if g.input.IsKeyPressed() {
+      g.init()
+      g.mode = ModeTitle
+    }
+  }
+
+  return nil
+}
+```
+
+> 注意g.input.IsKeyPressed()
+
+input.go中增加`IsKeyPressed`方法判断是否有空格或鼠标左键按下。
+
+```go
+func (i *Input) IsKeyPressed() bool {
+	return ebiten.IsKeyPressed(ebiten.KeyEnter)
+}
+```
+
+结果如下；
+
+![image-20240906165805967](images/image-20240906165805967.png)
+
+## 判断游戏胜负
+
+我们规定如果击杀所有外星人则游戏胜利，有1个外星人移出屏幕外或者碰撞到飞船则游戏失败。
+
+首先增加一个字段`failCount`用于记录移出屏幕外的外星人数量和与飞船碰撞的外星人数量之和：
+
+```golang
+type Game struct {
+  // -------省略-------
+  failCount int // 被外星人碰撞和移出屏幕的外星人数量之和
+}
+```
+
+然后我们在`Game.Update`方法中检测外星人是否移出屏幕，以及是否与飞船碰撞：
+
+```golang
+for alien := range g.aliens {
+  if alien.outOfScreen(g.cfg) {
+    g.failCount++
+    delete(g.aliens, alien)
+    continue
+  }
+
+  if CheckCollision(alien, g.ship) {
+    g.failCount++
+    delete(g.aliens, alien)
+    continue
+  }
+}
+```
+
+这里有一个问题，还记得吗？我们前面编写的`CheckCollision`函数接受的参数类型是`*Alien`和`*Bullet`，这里我们需要重复编写接受参数为`*Ship`和`*Alien`的函数吗？不用！
+
+
+
+> 下面的方法暂且不用，作为go的拓展性学习使用
+>
+> 碰撞检测和移出屏幕单独通过函数实现
+>
+> 但是下面提供的方法还是比较优秀和合理的
+
+
+
+我们将表示游戏中的实体对象抽象成一个`GameObject`结构：
+
+```golang
+type GameObject struct {
+  width  int
+  height int
+  x      float64
+  y      float64
+}
+
+func (gameObj *GameObject) Width() int {
+  return gameObj.width
+}
+
+func (gameObj *GameObject) Height() int {
+  return gameObj.height
+}
+
+func (gameObj *GameObject) X() float64 {
+  return gameObj.x
+}
+
+func (gameObj *GameObject) Y() float64 {
+  return gameObj.y
+}
+```
+
+然后定义一个接口`Entity`：
+
+```golang
+type Entity interface {
+  Width() int
+  Height() int
+  X() float64
+  Y() float64
+}
+```
+
+最后让我们游戏中的实体内嵌这个`GameObject`对象，即可自动实现`Entity`接口：
+
+```golang
+type Alien struct {
+  GameObject
+  image       *ebiten.Image
+  speedFactor float64
+}
+```
+
+这样`CheckCollision`即可改为接受两个`Entity`接口类型的参数：
+
+```golang
+// CheckCollision 两个物体之间是否碰撞
+func CheckCollision(entityA, entityB Entity) bool {
+  top, left := entityA.Y(), entityA.X()
+  bottom, right := entityA.Y()+float64(entityA.Height()), entityA.X()+float64(entityA.Width())
+  // 左上角
+  x, y := entityB.X(), entityB.Y()
+  if y > top && y < bottom && x > left && x < right {
+    return true
+  }
+
+  // 右上角
+  x, y = entityB.X()+float64(entityB.Width()), entityB.Y()
+  if y > top && y < bottom && x > left && x < right {
+    return true
+  }
+
+  // 左下角
+  x, y = entityB.X(), entityB.Y()+float64(entityB.Height())
+  if y > top && y < bottom && x > left && x < right {
+    return true
+  }
+
+  // 右下角
+  x, y = entityB.X()+float64(entityB.Width()), entityB.Y()+float64(entityB.Height())
+  if y > top && y < bottom && x > left && x < right {
+    return true
+  }
+
+  return false
+}
+```
+
+如果游戏失败则切换为ModeOver模式，屏幕上显示"Game Over!"。如果游戏胜利，则显示"You Win!"：
+
+```golang
+if g.failCount >= 1 {
+  g.overMsg = "Game Over!"
+} else if len(g.aliens) == 0 {
+  g.overMsg = "You Win!"
+}
+
+if len(g.overMsg) > 0 {
+  g.mode = ModeOver
+  g.aliens = make(map[*Alien]struct{})
+  g.bullets = make(map[*Bullet]struct{})
+}
+```
+
+注意，为了下次游戏能顺序进行，这里需要清楚所有的子弹和外星人。运行：
+
+## 总结
+
+本文接着上篇文章，介绍了发射子弹，检测碰撞，增加主界面和游戏结束界面等内容。至此一个简答的游戏就做出来了。可以看出使用ebitengine做一个游戏还是很简单的，非常推荐尝试呢！上手之后，建议看看官方仓库examples目录中的示例，会非常有帮助。

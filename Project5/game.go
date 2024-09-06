@@ -4,12 +4,29 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
+type Mode int
+
+// 创建全局const常量
+const (
+	ModeTitle Mode = iota
+	ModeGame
+	ModeOver
+)
+
 type Game struct {
-	input   *Input
-	ship    *Ship
-	cfg     *Config
-	bullets map[*Bullet]struct{}
-	aliens  map[*Alien]struct{}
+	input     *Input
+	ship      *Ship
+	cfg       *Config
+	bullets   map[*Bullet]struct{}
+	aliens    map[*Alien]struct{}
+	mode      Mode
+	failCount int // 被外星人碰撞和移出屏幕的外星人数量之和
+	overMsg   string
+}
+
+func (g *Game) init() {
+	g.CreateAliens()
+	g.CreateFonts()
 }
 
 func NewGame() *Game {
@@ -28,7 +45,7 @@ func NewGame() *Game {
 	}
 	// 调用 CreateAliens 创建一组外星人
 	g.CreateAliens()
-
+	g.init()
 	return g
 }
 
