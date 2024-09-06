@@ -19,6 +19,7 @@ type Config struct {
 	BulletColor       color.RGBA `json:"bulletColor"`
 	MaxBulletNum      int        `json:"maxBulletNum"`
 	BulletInterval    int64      `json:"bulletInterval"`
+	AlienSpeedFactor  float64    `json:"alienSpeedFactor"`
 }
 
 func loadConfig() *Config {

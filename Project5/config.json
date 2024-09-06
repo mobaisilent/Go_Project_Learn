@@ -23,5 +23,7 @@
   },
   "_comment4": "对子弹和发射时间间隔做点限制",
   "maxBulletNum": 23,
-  "bulletInterval": 150
+  "bulletInterval": 150,
+  "_comment5": "下面是外星人信息",
+  "alienSpeedFactor": 0.8
 }

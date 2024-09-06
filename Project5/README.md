@@ -1210,3 +1210,363 @@ func (bullet *Bullet) outOfScreen() bool {
 ```
 
 > 结果是 全屏幕可以无缝衔接子弹
+
+## 外星人来了
+
+外星人图片如下：
+
+![img](images/alien.png)
+
+同飞船一样，编写Alien类，添加绘制自己的方法：
+
+添加 `alien.go`
+
+```go
+package main
+
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"log"
+)	
+
+type Alien struct {
+	image       *ebiten.Image
+	width       int
+	height      int
+	x           float64
+	y           float64
+	speedFactor float64
+}
+
+func NewAlien(cfg *Config) *Alien {
+	img, _, err := ebitenutil.NewImageFromFile("../images/alien.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	width, height := img.Size()
+	return &Alien{
+		image:       img,
+		width:       width,
+		height:      height,
+		x:           0,
+		y:           0,
+		speedFactor: cfg.AlienSpeedFactor,
+	}
+}
+
+func (alien *Alien) Draw(screen *ebiten.Image) {
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(alien.x, alien.y)
+	screen.DrawImage(alien.image, op)
+}
+
+```
+
+游戏开始时需要创建一组外星人，计算一行可以容纳多少个外星人，考虑到左右各留一定的空间，两个外星人之间留一点空间。在游戏一开始就创建一组外星人：
+
+修改 `game.go` 如下所示：
+```go
+package main
+
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+type Game struct {
+	input   *Input
+	ship    *Ship
+	cfg     *Config
+	bullets map[*Bullet]struct{}
+	aliens  map[*Alien]struct{}
+}
+
+func NewGame() *Game {
+	cfg := loadConfig()
+	ebiten.SetWindowSize(cfg.ScreenWidth, cfg.ScreenHeight)
+	ebiten.SetWindowTitle(cfg.Title)
+
+	g := &Game{
+		input: &Input{
+			msg: "hello world",
+		},
+		ship:    NewShip(cfg.ScreenWidth, cfg.ScreenHeight),
+		cfg:     cfg,
+		bullets: make(map[*Bullet]struct{}),
+		aliens:  make(map[*Alien]struct{}),
+	}
+	// 调用 CreateAliens 创建一组外星人
+	g.CreateAliens()
+
+	return g
+}
+
+func (g *Game) addBullet(bullet *Bullet) {
+	g.bullets[bullet] = struct{}{}
+}
+
+func (g *Game) addAlien(alien *Alien) {
+	g.aliens[alien] = struct{}{}
+}
+
+func (g *Game) CreateAliens() {
+	alien := NewAlien(g.cfg)
+
+	availableSpaceX := g.cfg.ScreenWidth - 2*alien.width
+	numAliens := availableSpaceX / (2 * alien.width)+1   // +1 刚好铺满我的屏幕，具体参考你自己
+
+	for i := 0; i < numAliens; i++ {
+		alien = NewAlien(g.cfg)
+		alien.x = float64(alien.width + 2*alien.width*i)
+		g.addAlien(alien)
+	}
+}
+
+```
+
+左右各留一个外星人宽度的空间：
+
+```
+availableSpaceX := g.cfg.ScreenWidth - 2*alien.width 
+```
+
+然后，两个外星人之间留一个外星人宽度的空间。所以一行可以创建的外星人的数量为：
+
+```
+numAliens := availableSpaceX / (2 * alien.width) 
+```
+
+创建一组外星人，依次排列。
+
+同样地，我们需要在`Game.Draw`方法中添加绘制外星人的代码：
+
+```golang
+func (g *Game) Draw(screen *ebiten.Image) {
+  // -------省略-------
+  for alien := range g.aliens {
+    alien.Draw(screen)
+  }
+}
+```
+
+运行结果如下；
+![image-20240906141058522](images/image-20240906141058522.png)
+
+修改`config.json` 添加移动速度，记得修改相应的`config.go`
+
+```json
+{
+  "_comment1": "下面是屏幕信息",
+  "screenWidth": 640,
+  "screenHeight": 480,
+  "title": "外星人入侵",
+  "bgColor": {
+    "r": 230,
+    "g": 230,
+    "b": 230,
+    "a": 255
+  },
+  "_comment2": "下面是飞船速度",
+  "shipSpeedFactor": 3,
+  "_comment3": "下面是子弹信息",
+  "bulletWidth": 3,
+  "bulletHeight": 15,
+  "bulletSpeedFactor": 2,
+  "bulletColor": {
+    "r": 80,
+    "g": 80,
+    "b": 80,
+    "a": 255
+  },
+  "_comment4": "对子弹和发射时间间隔做点限制",
+  "maxBulletNum": 23,
+  "bulletInterval": 150,
+  "_comment5": "下面是外星人信息",
+  "alienSpeedFactor": 0.8
+}
+```
+
+```go
+	AlienSpeedFactor  float64    `json:"alienSpeedFactor"`
+```
+
+修改`game.go` 让外星人动起来:
+
+```golang
+package main
+
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+type Game struct {
+	input   *Input
+	ship    *Ship
+	cfg     *Config
+	bullets map[*Bullet]struct{}
+	aliens  map[*Alien]struct{}
+}
+
+func NewGame() *Game {
+	cfg := loadConfig()
+	ebiten.SetWindowSize(cfg.ScreenWidth, cfg.ScreenHeight)
+	ebiten.SetWindowTitle(cfg.Title)
+
+	g := &Game{
+		input: &Input{
+			msg: "hello world",
+		},
+		ship:    NewShip(cfg.ScreenWidth, cfg.ScreenHeight),
+		cfg:     cfg,
+		bullets: make(map[*Bullet]struct{}),
+		aliens:  make(map[*Alien]struct{}),
+	}
+	// 调用 CreateAliens 创建一组外星人
+	g.CreateAliens()
+
+	return g
+}
+
+func (g *Game) addBullet(bullet *Bullet) {
+	g.bullets[bullet] = struct{}{}
+}
+
+func (g *Game) addAlien(alien *Alien) {
+	g.aliens[alien] = struct{}{}
+}
+
+func (g *Game) CreateAliens() {
+	alien := NewAlien(g.cfg)
+
+	availableSpaceX := g.cfg.ScreenWidth - 2*alien.width
+	numAliens := availableSpaceX/(2*alien.width) + 1
+
+	for i := 0; i < numAliens; i++ {
+		alien = NewAlien(g.cfg)
+		alien.x = float64(alien.width + 2*alien.width*i)
+		g.addAlien(alien)
+	}
+
+	for row := 0; row < 2; row++ {
+		for i := 0; i < numAliens; i++ {
+			alien = NewAlien(g.cfg)
+			alien.x = float64(alien.width + 2*alien.width*i)
+			alien.y = float64(alien.height*row) * 1.5
+			g.addAlien(alien)
+		}
+	}
+}
+
+```
+
+让外星人都起来，同样地还是在`Game.Update`方法中更新位置：
+
+```go
+func (g *Game) Update() error {
+	g.input.Update(g)
+	// 子弹移动
+	for bullet := range g.bullets {
+		bullet.y -= bullet.speedFactor
+		if bullet.outOfScreen() {
+			delete(g.bullets, bullet)
+		}
+	}
+
+	for alien := range g.aliens {
+		alien.y += alien.speedFactor
+	}
+
+	// g.CheckCollision()  这里是后面碰撞检测需要用到的函数，如果只看外星人移动可以把这里注释掉
+	return nil
+}
+```
+
+
+
+![image-20240906141329108](images/image-20240906141329108.png)
+
+>  非常的 Perfect
+
+## 射击！！
+
+当前子弹碰到外星人直接穿过去了，我们希望能击杀外星人。这需要检查子弹和外星人之间的碰撞。我们新增一个文件collision.go，并编写检查子弹与外星人是否碰撞的函数。这里我采用最直观的碰撞检测方法，即子弹的4个顶点只要有一个位于外星人矩形中，就认为它们碰撞。
+
+```golang
+package main
+
+import (
+)
+
+// CheckCollision 检查子弹和外星人之间是否有碰撞
+func CheckCollision(bullet *Bullet, alien *Alien) bool {
+	alienTop, alienLeft := alien.y, alien.x
+	alienBottom, alienRight := alien.y+float64(alien.height), alien.x+float64(alien.width)
+	// 左上角
+	x, y := bullet.x, bullet.y
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	// 右上角
+	x, y = bullet.x+float64(bullet.width), bullet.y
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	// 左下角
+	x, y = bullet.x, bullet.y+float64(bullet.height)
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	// 右下角
+	x, y = bullet.x+float64(bullet.width), bullet.y+float64(bullet.height)
+	if y > alienTop && y < alienBottom && x > alienLeft && x < alienRight {
+		return true
+	}
+
+	return false
+}
+
+```
+
+接着我们在`Game.Update`方法中调用这个方法，并且将碰撞的子弹和外星人删除。
+
+```go
+func (g *Game) CheckCollision() {
+	for bullet := range g.bullets {
+		for alien := range g.aliens {
+			if CheckCollision(bullet, alien) {
+				// fmt.Println("collision")
+				delete(g.aliens, alien)
+				delete(g.bullets, bullet)
+				// fmt.Println("here delete alien")
+			}
+		}
+	}
+}
+// 这段代码的循环逻辑是经过检测的，外层是子弹才会更合理：不然会导致碰撞检测到了但是删除“外星人”的时候的指针并没有改变
+
+
+// 更新游戏内容显示
+func (g *Game) Update() error {
+	g.input.Update(g)
+	// 子弹移动
+	for bullet := range g.bullets {
+		bullet.y -= bullet.speedFactor
+		if bullet.outOfScreen() {
+			delete(g.bullets, bullet)
+		}
+	}
+
+	for alien := range g.aliens {
+		alien.y += alien.speedFactor
+	}
+
+	g.CheckCollision()
+	return nil
+}
+```
+
+![image-20240906143757128](images/image-20240906143757128.png)

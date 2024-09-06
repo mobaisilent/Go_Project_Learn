@@ -6,17 +6,35 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-// 更新游戏内容显示
+func (g *Game) CheckCollision() {
+	for bullet := range g.bullets {
+		for alien := range g.aliens {
+			if CheckCollision(bullet, alien) {
+				// fmt.Println("collision")
+				delete(g.aliens, alien)
+				delete(g.bullets, bullet)
+				// fmt.Println("here delete alien")
+			}
+		}
+	}
+}
 
+// 更新游戏内容显示
 func (g *Game) Update() error {
 	g.input.Update(g)
+	// 子弹移动
 	for bullet := range g.bullets {
 		bullet.y -= bullet.speedFactor
 		if bullet.outOfScreen() {
 			delete(g.bullets, bullet)
 		}
 	}
-	// 子弹移动
+
+	for alien := range g.aliens {
+		alien.y += alien.speedFactor
+	}
+
+	g.CheckCollision()
 	return nil
 }
 
@@ -27,6 +45,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		bullet.Draw(screen)
 	}
 	// 绘制子弹
+	for alien := range g.aliens {
+		alien.Draw(screen)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
