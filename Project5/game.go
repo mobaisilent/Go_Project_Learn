@@ -5,9 +5,10 @@ import (
 )
 
 type Game struct {
-	input *Input
-	ship  *Ship
-	cfg   *Config
+	input   *Input
+	ship    *Ship
+	cfg     *Config
+	bullets map[*Bullet]struct{}
 }
 
 func NewGame() *Game {
@@ -19,7 +20,12 @@ func NewGame() *Game {
 		input: &Input{
 			msg: "hello world",
 		},
-		ship: NewShip(cfg.ScreenWidth, cfg.ScreenHeight),
-		cfg:  cfg,
+		ship:    NewShip(cfg.ScreenWidth, cfg.ScreenHeight),
+		cfg:     cfg,
+		bullets: make(map[*Bullet]struct{}),
 	}
+}
+
+func (g *Game) addBullet(bullet *Bullet) {
+	g.bullets[bullet] = struct{}{}
 }

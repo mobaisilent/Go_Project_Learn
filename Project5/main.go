@@ -9,13 +9,24 @@ import (
 // 更新游戏内容显示
 
 func (g *Game) Update() error {
-	g.input.Update(g.ship, g.cfg)
+	g.input.Update(g)
+	for bullet := range g.bullets {
+		bullet.y -= bullet.speedFactor
+		if bullet.outOfScreen() {
+			delete(g.bullets, bullet)
+		}
+	}
+	// 子弹移动
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(g.cfg.BgColor) // 绘制背景
 	g.ship.Draw(screen, g.cfg) // 绘制飞船
+	for bullet := range g.bullets {
+		bullet.Draw(screen)
+	}
+	// 绘制子弹
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {

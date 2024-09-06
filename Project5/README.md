@@ -895,3 +895,318 @@ func (i *Input) Update(ship *Ship, cfg *Config) {
 
 
 
+## 发射子弹
+
+我们不用另外准备子弹的图片，直接画一个矩形就ok。为了可以灵活控制，我们将子弹的宽、高、颜色以及速率都用配置文件来控制：
+
+修改 `config.json` 如下
+
+```json
+{
+  "_comment1": "下面是屏幕信息",
+  "screenWidth": 640,
+  "screenHeight": 480,
+  "title": "外星人入侵",
+  "bgColor": {
+    "r": 230,
+    "g": 230,
+    "b": 230,
+    "a": 255
+  },
+  "_comment2": "下面是飞船速度",
+  "shipSpeedFactor": 3,
+  "_comment3": "下面是子弹信息",
+  "bulletWidth": 3,
+  "bulletHeight": 15,
+  "bulletSpeedFactor": 2,
+  "bulletColor": {
+    "r": 80,
+    "g": 80,
+    "b": 80,
+    "a": 255
+  }
+}
+```
+
+> 注意 json 中不能直接放入注释信息，json5中可以放入注释信息，json中可以通过上面的方式子放入注释信息
+
+新增一个文件bullet.go，定义子弹的结构类型和New方法：
+
+`bullet.go`
+
+```go
+package main
+
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+	"image"
+)
+
+// 创建子弹结构体
+type Bullet struct {
+	image       *ebiten.Image
+	width       int
+	height      int
+	x           float64
+	y           float64
+	speedFactor float64
+}
+
+// 创建子弹创建的方法
+func NewBullet(cfg *Config, ship *Ship) *Bullet {
+	rect := image.Rect(0, 0, cfg.BulletWidth, cfg.BulletHeight)
+	img := ebiten.NewImage(rect.Dx(), rect.Dy())
+	img.Fill(cfg.BulletColor)
+
+	return &Bullet{
+		image:       img,
+		width:       cfg.BulletWidth,
+		height:      cfg.BulletHeight,
+		x:           ship.x + float64(ship.width-cfg.BulletWidth)/2,
+		y:           ship.y - float64(cfg.BulletHeight),
+		speedFactor: cfg.BulletSpeedFactor,
+	}
+}
+
+```
+
+> 子弹的初始化信息 是设置好了
+
+首先根据配置的宽高创建一个rect对象，然后调用`ebiten.NewImageWithOptions`创建一个`*ebiten.Image`对象。
+
+子弹都是从飞船头部发出的，所以它的横坐标等于飞船中心的横坐标，左上角的纵坐标=屏幕高度-飞船高-子弹高。
+
+随便增加子弹的绘制方法：
+
+```golang
+func (bullet *Bullet) Draw(screen *ebiten.Image) {
+  op := &ebiten.DrawImageOptions{}
+  op.GeoM.Translate(bullet.x, bullet.y)
+  screen.DrawImage(bullet.image, op)
+}
+```
+
+> 把这段代码直接放入 `bullet.go` 最下面即可
+
+我们在Game对象中增加一个map来管理子弹：
+
+```golang
+type Game struct {
+  // -------省略-------
+  bullets map[*Bullet]struct{}
+}
+
+func NewGame() *Game {
+  return &Game{
+    // -------省略-------
+    bullets: make(map[*Bullet]struct{}),
+  }
+}
+```
+
+然后在`Draw`方法中，我们需要将子弹也绘制出来：
+
+```golang
+func (g *Game) Draw(screen *ebiten.Image) {
+  screen.Fill(g.cfg.BgColor)
+  g.ship.Draw(screen)
+  for bullet := range g.bullets {
+    bullet.Draw(screen)
+  }
+}
+```
+
+子弹位置如何更新呢？在`Game.Update`中更新，与飞船类似，只是飞船只能水平移动，而子弹只能垂直移动。
+
+```golang
+func (g *Game) Update() error {
+  for bullet := range g.bullets {
+    bullet.y -= bullet.speedFactor
+  }
+  // -------省略-------
+}
+```
+
+子弹的更新、绘制逻辑都完成了，可是我们还没有子弹！现在我们就来实现按空格发射子弹的功能。我们需要在`Input.Update`方法中判断空格键是否按下，由于该方法需要访问Game对象的多个字段，干脆传入Game对象： 修改 input.go 文件
+
+> 这里修改了 `input.go` 中的Update函数及其传入的参数，所以需要修改 `main.go` 中的参数信息：直接传入整个game对象
+
+```golang
+func (i *Input) Update(g *Game) {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		g.ship.x -= g.cfg.ShipSpeedFactor
+		if g.ship.x < -float64(g.ship.width)/2 {
+			g.ship.x = -float64(g.ship.width) / 2
+		}
+	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		g.ship.x += g.cfg.ShipSpeedFactor
+		if g.ship.x > float64(g.cfg.ScreenWidth)-float64(g.ship.width)/2 {
+			g.ship.x = float64(g.cfg.ScreenWidth) - float64(g.ship.width)/2
+		}
+	} else if ebiten.IsKeyPressed(ebiten.KeySpace) {
+		bullet := NewBullet(g.cfg, g.ship)
+		g.addBullet(bullet)
+	}
+}
+```
+
+对应修改的main.go中的 Update如下：
+
+```go
+func (g *Game) Update() error {
+	g.input.Update(g)
+	for bullet := range g.bullets {
+		bullet.y -= bullet.speedFactor
+	}
+	// 子弹移动
+	return nil
+}
+```
+
+给Game对象增加一个`addBullet`方法：
+
+```golang
+func (g *Game) addBullet(bullet *Bullet) {
+  g.bullets[bullet] = struct{}{}
+}
+```
+
+直接运行结果如下：
+
+![image-20240906123306061](images/image-20240906123306061.png)
+
+可见子弹绘制逻辑和绘制实现了，目前有两个问题：
+
+- 无法一边移动一边发射，仔细看看`Input.Update`方法中的代码，你能发现什么问题吗？
+- 子弹太多了，我们想要限制子弹的数量。
+
+下面来逐一解决这些问题。
+
+第一个问题很好解决，因为在KeyLeft/KeyRight/KeySpace这三个判断中我们用了if-else。这样会优先处理移动的操作。将KeySpace移到一个单独的if中即可：
+
+```go
+func (i *Input) Update(g *Game) {
+  // -------省略-------
+  if ebiten.IsKeyPressed(ebiten.KeySpace) {
+    bullet := NewBullet(g.cfg, g.ship)
+    g.addBullet(bullet)
+  }
+}
+```
+
+第二个问题，在配置中，增加同时最多存在的子弹数：
+
+> 实测 23 颗子弹可以确保从飞机头部到界面的最高部分以及能发射出子弹，发射完毕之后也能无缝衔接上去
+
+```json
+{
+  "maxBulletNum": 23
+}
+```
+
+```golang
+type Config struct {
+  MaxBulletNum      int        `json:"maxBulletNum"`
+}
+```
+
+然后我们在`Input.Update`方法中判断，如果目前存在的子弹数小于`MaxBulletNum`才能创建新的子弹：
+
+```golang
+if ebiten.IsKeyPressed(ebiten.KeySpace) {
+  if len(g.bullets) < g.cfg.MaxBulletNum {
+    bullet := NewBullet(g.cfg, g.ship)
+    g.addBullet(bullet)
+  }
+}
+```
+
+那么修改好的`input.go` 里面的 Update 函数如下：
+```go
+func (i *Input) Update(g *Game) {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		g.ship.x -= g.cfg.ShipSpeedFactor
+		if g.ship.x < -float64(g.ship.width)/2 {
+			g.ship.x = -float64(g.ship.width) / 2
+		}
+	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		g.ship.x += g.cfg.ShipSpeedFactor
+		if g.ship.x > float64(g.cfg.ScreenWidth)-float64(g.ship.width)/2 {
+			g.ship.x = float64(g.cfg.ScreenWidth) - float64(g.ship.width)/2
+		}
+	}
+	// 修改这里为else 也就是飞船发射子弹的逻辑和左右移动是无关的
+	if ebiten.IsKeyPressed(ebiten.KeySpace) {
+		if len(g.bullets) < g.cfg.MaxBulletNum {
+			bullet := NewBullet(g.cfg, g.ship)
+			g.addBullet(bullet)
+		}
+	}
+}
+```
+
+<img src="images/image-20240906123956292.png" alt="image-20240906123956292" style="zoom:50%;" />
+
+数量好像被限制了，但是不是我们配置的23,原来`Input.Update()`的调用间隔太短了，导致我们一次space按键会发射多个子弹。我们可以控制两个子弹之间的时间间隔。同样用配置文件来控制（单位毫秒）： 实际测试 150ms 比较合适
+
+```json
+{
+  "bulletInterval": 150
+}
+```
+
+```golang
+type Config struct {
+  BulletInterval    int64      `json:"bulletInterval"`
+}
+```
+
+在`Input`结构中增加一个`lastBulletTime`字段记录上次发射子弹的时间：
+
+```golang
+type Input struct {
+  lastBulletTime time.Time
+}
+```
+
+距离上次发射子弹的时间大于`BulletInterval`毫秒，才能再次发射，发射成功之后更新时间
+
+```golang
+func (i *Input) Update(g *Game) {
+  // -------省略-------
+  	if ebiten.IsKeyPressed(ebiten.KeySpace) {
+      if len(g.bullets) < g.cfg.MaxBulletNum &&
+        time.Since(i.lastBulletTime).Milliseconds() > g.cfg.BulletInterval {
+        bullet := NewBullet(g.cfg, g.ship)
+        g.addBullet(bullet)
+        i.lastBulletTime = time.Now()
+      }
+	}
+}
+```
+
+又出现了一个问题，23个子弹飞出屏幕外之后还是不能发射子弹。我们需要把离开屏幕的子弹删除。这适合在`Game.Update`函数中做：
+
+```golang
+func (g *Game) Update() error {
+	g.input.Update(g)
+	for bullet := range g.bullets {
+		bullet.y -= bullet.speedFactor
+		if bullet.outOfScreen() {
+			delete(g.bullets, bullet)
+		}
+	}
+	// 子弹移动
+	return nil
+}
+```
+
+为了`Bullet`添加判断是否处于屏幕外的方法：
+
+```golang
+func (bullet *Bullet) outOfScreen() bool {
+  return bullet.y < -float64(bullet.height)
+}
+```
+
+> 结果是 全屏幕可以无缝衔接子弹
